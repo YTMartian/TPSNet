@@ -33,7 +33,7 @@ class TextEvaluator():
         # use dataset_name to decide eval_gt_path
         if "totaltext" in dataset_name:
             self._text_eval_gt_path = "mmocr/core/evaluation/evaluation_e2e/datasets/evaluation/gt_totaltext.zip"
-            self._word_spotting = True
+            self._word_spotting = False
         elif "ctw1500" in dataset_name:
             self._text_eval_gt_path = "mmocr/core/evaluation/evaluation_e2e/datasets/evaluation/gt_ctw1500.zip"
             self._word_spotting = False
@@ -78,10 +78,10 @@ class TextEvaluator():
                         for i in range(len(data[ix]['polys'])):
                             outstr = outstr + str(int(data[ix]['polys'][i][0])) +','+str(int(data[ix]['polys'][i][1])) +','
                         # ass = de_ascii(data[ix]['rec'])
-                        ass = str(data[ix]['rec'])
-                        if len(ass)>=0: # 
-                            outstr = outstr + str(round(data[ix]['score'], 3)) +',####'+ass+'\n'	
-                            f2.writelines(outstr)
+                        # ass = str(data[ix]['rec'])
+                        # if len(ass)>=0: #
+                        #     outstr = outstr + str(round(data[ix]['score'], 3)) +',####'+ass+'\n'
+                        #     f2.writelines(outstr)
                 f2.close()
         dirn = temp_dir
         lsc = [cf_th] 
@@ -179,7 +179,7 @@ class TextEvaluator():
 
         # parse
         template = "(\S+): (\S+): (\S+), (\S+): (\S+), (\S+): (\S+)"
-        for task in ("e2e_method", "det_only_method"):
+        for task in ["det_only_method"]:
             result = text_result[task]
             groups = re.match(template, result).groups()
             self._results[groups[0]] = {groups[i*2+1]: float(groups[(i+1)*2]) for i in range(3)}

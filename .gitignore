@@ -2,3 +2,8 @@
 /demo/
 /.idea/
 /resources/
+mmocr.egg-info/
+build/
+pretrained/
+work_dirs/
+mmocr/models/textend2end/utils/grid_sample_batch/*.so

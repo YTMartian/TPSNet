@@ -189,8 +189,14 @@ class IcdarE2EDataset(IcdarDataset):
             ann_infos.append(self.get_ann_info(i))
         if 'totaltext' in self.ann_file:
             dataset_name = 'totaltext'
-        if 'ctw' in self.ann_file:
+        elif 'ctw' in self.ann_file:
             dataset_name = 'ctw1500'
+        elif '2017' in self.ann_file:
+            dataset_name = 'icdar2017'
+        elif '2019' in self.ann_file:
+            dataset_name = 'icdar2019'
+        else:
+            dataset_name = 'custom'
         eval_results = eval_hmean_e2e(
             dataset_name,
             results,

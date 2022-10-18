@@ -479,7 +479,7 @@ class TPSTargets(TextSnakeTargets):
 
         polygon_masks = results['gt_masks'].masks
         polygon_masks_ignore = results['gt_masks_ignore'].masks
-        gt_texts = results['texts']
+        # gt_texts = results['texts']
         h, w, _ = results['img_shape']
 
         level_maps, lv_text_polys_idx, polygons_area, lv_tps_coeffs = self.generate_level_targets((h, w), polygon_masks,
@@ -492,7 +492,7 @@ class TPSTargets(TextSnakeTargets):
             'p5_maps': level_maps[2],
             'lv_text_polys_idx':lv_text_polys_idx,
             'polygons_area': polygons_area,
-            'gt_texts': DC(gt_texts, cpu_only=True),
+            # 'gt_texts': DC(gt_texts, cpu_only=True),
             'lv_tps_coeffs': lv_tps_coeffs
         }
         if len(self.level_size_divisors) == 4:

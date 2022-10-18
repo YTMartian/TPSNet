@@ -1,4 +1,5 @@
 import sys
+
 sys.path.insert(0, 'mmocr/core/evaluation/evaluation_e2e')
 from .evaluation_e2e.text_evaluation import TextEvaluator
 from mmcv.utils import print_log
@@ -7,6 +8,12 @@ import pickle
 import numpy as np
 import json
 from mmdet.datasets.coco import COCO
+
+
+#
+# if __name__ == '__main__':
+#     res = sys.argv[1]
+#     main(res)
 
 def eval_hmean_e2e(eval_dataset, results, coco_annos, logger=None):
     # coco_annos = COCO('../../data/totaltext/instances_test.json')
@@ -17,17 +24,16 @@ def eval_hmean_e2e(eval_dataset, results, coco_annos, logger=None):
         # idx = str(img_id).zfill(7)
         res = results[i]
         ins = res['boundary_result']
-        recs = res['strs']
         for j in range(len(ins)):
-            pts = np.array(ins[j][:-1]).reshape(-1,2).tolist()
+            pts = np.array(ins[j][:-1]).reshape(-1, 2).tolist()
             score = ins[j][-1]
-            rec = recs[j]
+            image_id = i
+            if eval_dataset == 'ctw1500':
+                image_id = int(img_name[5:-4])
             out = {
-                "image_id": int(img_name[5:-4]) if eval_dataset == 'ctw1500' else i,
-                # "image_id": i,
+                "image_id": image_id,
                 "category_id": 1,
                 "polys": pts,
-                "rec": rec,
                 "score": score
             }
             output.append(out)
@@ -52,22 +58,19 @@ def eval_hmean_e2e(eval_dataset, results, coco_annos, logger=None):
         outdir = 'custom_res'
     cfg = {}
     best_det_hmean = -1
-    best_e2e_hmean = -1
     dets = []
-    e2es = []
-    for t in [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8, 0.9]:
+    for t in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
         print("---------------Score Thr: {}---------------".format(t), logger)
-        cfg['INFERENCE_TH_TEST'] = t # tune this parameter to achieve best result
-        e = TextEvaluator(dataset_name, cfg, False, output_dir= outdir)
+        cfg['INFERENCE_TH_TEST'] = t  # tune this parameter to achieve best result
+        e = TextEvaluator(dataset_name, cfg, False, output_dir=outdir)
         res = e.evaluate()
         dets.append(res['DETECTION_ONLY_RESULTS'])
-        e2es.append(res['E2E_RESULTS'])
         if res['DETECTION_ONLY_RESULTS']['hmean'] > best_det_hmean:
             best_det = res['DETECTION_ONLY_RESULTS']
             best_det_hmean = best_det['hmean']
-        if res['E2E_RESULTS']['hmean'] > best_e2e_hmean:
-            best_e2e = res['E2E_RESULTS']
-            best_e2e_hmean = best_e2e['hmean']
+        # if res['E2E_RESULTS']['hmean'] > best_e2e_hmean:
+        #     best_e2e = res['E2E_RESULTS']
+        #     best_e2e_hmean = best_e2e['hmean']
         # if logger is not None:
         # print_log(', '.join(' : '.join([a, str(res[a])]) for a in res), logger)
         # print(res)
@@ -78,10 +81,6 @@ def eval_hmean_e2e(eval_dataset, results, coco_annos, logger=None):
     # if logger is not None:
     print("---------------Final Results---------------", logger)
     print_log("Detection results:   " + ', '.join(' : '.join([a, str(best_det[a])]) for a in best_det), logger)
-    print_log("E2E results:   " + ', '.join(' : '.join([a, str(best_e2e[a])]) for a in best_e2e), logger)
+    # print_log("E2E results:   " + ', '.join(' : '.join([a, str(best_e2e[a])]) for a in best_e2e), logger)
 
-    return {'e2e-hmean':best_e2e['hmean'], 'det_hmean':best_det['hmean']}
-#
-# if __name__ == '__main__':
-#     res = sys.argv[1]
-#     main(res)
+    return {'det_hmean': best_det['hmean']}

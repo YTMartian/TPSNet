@@ -93,6 +93,8 @@ def extract_boundary(result):
     assert 'boundary_result' in result.keys()
 
     boundaries_with_scores = result['boundary_result']
+    # print(boundaries_with_scores)
+    # print(len(boundaries_with_scores[0]))
     assert utils.is_2dlist(boundaries_with_scores)
 
     boundaries = [b[:-1] for b in boundaries_with_scores]
