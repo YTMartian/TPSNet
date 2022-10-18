@@ -179,7 +179,6 @@ class IcdarE2EDataset(IcdarDataset):
 
         metrics = metric if isinstance(metric, list) else [metric]
         allowed_metrics = ['hmean-e2e']
-        metrics = set(metrics) & set(allowed_metrics)
 
         img_infos = []
         ann_infos = []
@@ -187,6 +186,8 @@ class IcdarE2EDataset(IcdarDataset):
             img_info = {'filename': self.data_infos[i]['file_name']}
             img_infos.append(img_info)
             ann_infos.append(self.get_ann_info(i))
+        print(self.ann_file)
+        input()
         if 'totaltext' in self.ann_file:
             dataset_name = 'totaltext'
         elif 'ctw' in self.ann_file:

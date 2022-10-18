@@ -124,7 +124,13 @@ test_pipeline = [
         ])
 ]
 
-data_root = '/home/tim/DataSets/TotalText/origin/'
+data_roots = ['/home/tim/DataSets/C/mmocr-ctw1500800x800/',
+              '/home/tim/DataSets/TotalText/mmocr-totaltext800x800/',
+              '/home/tim/DataSets/ICDAR2017-RCTW/mmocr-icdar2017-rctw800x800/',
+              '/home/tim/DataSets/ICDAR2019-LSVT/mmocr-icdar2019-lsvt800x800/'
+              ]
+
+data_root = data_roots[1]
 
 data = dict(
     samples_per_gpu=2,
@@ -133,20 +139,20 @@ data = dict(
     test_dataloader=dict(samples_per_gpu=1),
     train=dict(
         type=dataset_type,
-        ann_file=[data_root + 'totaltext_train.json'],
-        img_prefix=[data_root + 'imgs/training'],
+        ann_file=[data_root + 'instances_training.json'],
+        img_prefix=[data_root + 'imgs'],
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
-        ann_file=data_root + 'totaltext_test.json',
+        ann_file=data_root + 'instances_test.json',
         img_prefix=data_root + 'imgs',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'totaltext_test.json',
+        ann_file=data_root + 'instances_test.json',
         img_prefix=data_root + 'imgs',
         pipeline=test_pipeline, ))
-evaluation = dict(interval=1, metric='hmean-iou', by_epoch=False)
+evaluation = dict(interval=1, metric='hmean-iou', by_epoch=True)
 
 # optimizer
 optimizer = dict(type='SGD', lr=1e-3, momentum=0.90, weight_decay=5e-4)
@@ -160,7 +166,7 @@ runner = {
     'max_iters': 100000
 }
 
-checkpoint_config = dict(interval=1, by_epoch=False)
+checkpoint_config = dict(interval=1, by_epoch=True)
 # yapf:disable
 log_config = dict(
     interval=20,
