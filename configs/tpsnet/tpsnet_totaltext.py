@@ -31,9 +31,9 @@ model = dict(
         scales=(8, 16, 32),
         sample_size=(8, 32),
         loss=dict(type='TPSLoss', gauss_center=True,
-                  point_loss=False, with_BA=True, border_relax_thr=0.8),
+                  point_loss=True, with_BA=False, border_relax_thr=0.8),
         num_fiducial=num_fiducial,
-        fiducial_dist="cross",
+        fiducial_dist="edge",
         num_convs=4),
     recog_head=dict(
         type='TPSRecogHead',
@@ -124,10 +124,11 @@ test_pipeline = [
         ])
 ]
 
-data_roots = ['/home/tim/DataSets/C/mmocr-ctw1500800x800/',
+data_roots = ['/home/tim/DataSets/CTW1500/mmocr-ctw1500800x800/',
               '/home/tim/DataSets/TotalText/mmocr-totaltext800x800/',
               '/home/tim/DataSets/ICDAR2017-RCTW/mmocr-icdar2017-rctw800x800/',
-              '/home/tim/DataSets/ICDAR2019-LSVT/mmocr-icdar2019-lsvt800x800/'
+              '/home/tim/DataSets/ICDAR2019-LSVT/mmocr-icdar2019-lsvt800x800/',
+              '/home/tim/DataSets/TotalText/origin/',
               ]
 
 data_root = data_roots[1]
@@ -152,7 +153,7 @@ data = dict(
         ann_file=data_root + 'instances_test.json',
         img_prefix=data_root + 'imgs',
         pipeline=test_pipeline, ))
-evaluation = dict(interval=1, metric='hmean-iou', by_epoch=True)
+evaluation = dict(interval=500, metric='hmean-iou', by_epoch=False)
 
 # optimizer
 optimizer = dict(type='SGD', lr=1e-3, momentum=0.90, weight_decay=5e-4)
@@ -163,10 +164,10 @@ lr_config = dict(
 )
 runner = {
     'type': 'IterBasedRunner',
-    'max_iters': 100000
+    'max_iters': 1000000
 }
 
-checkpoint_config = dict(interval=1, by_epoch=True)
+checkpoint_config = dict(interval=1000, by_epoch=False)
 # yapf:disable
 log_config = dict(
     interval=20,

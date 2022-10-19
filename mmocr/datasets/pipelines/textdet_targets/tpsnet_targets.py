@@ -145,11 +145,11 @@ class TPSTargets(TextSnakeTargets):
 
     def generate_gauss(self, img_size, text_poly, size_divisor):
         head_edge, tail_edge, top_sideline, bot_sideline = self.reorder_poly_edge(text_poly[0].reshape(-1, 2))
-        try:
-            resample_top_line, resample_bot_line = self.resample_polygon(top_sideline, bot_sideline)
-        except Exception as e:
-            print('not enough values to unpack (expected 2, got 0)', e, '!!!!!!!!!!')
-            return None
+        # try:
+        resample_top_line, resample_bot_line = self.resample_polygon(top_sideline, bot_sideline)
+        # except Exception as e:
+        #     print('not enough values to unpack (expected 2, got 0)', e, '!!!!!!!!!!')
+        #     return None
         # clf = multivariate_normal(mean=[0, 0],
         #                           cov=[[0.9, 0], [0, 0.15]]
         #                           )
@@ -201,12 +201,26 @@ class TPSTargets(TextSnakeTargets):
         for polygon in [top_line, bot_line]:
             if polygon.shape[0] >= 3 and self.interp:
                 x, y = polygon[:, 0], polygon[:, 1]
-                try:
-                    tck, u = splprep([x, y], k=3 if polygon.shape[0] >= 5 else 2, s=0)
-                except Exception as e:
-                    print('!!!!!!!!!!ERROR: t, c, o = _fitpack._parcur(ravel(transpose(x)), w, u, ub, ue, k,', e,
-                          '!!!!!!!!!!')
-                    continue
+                # splprep求b样条曲线，如果有相同的值就会报错ERROR: t, c, o = _fitpack._parcur(ravel(transpose(x)), w, u, ub, ue, k,
+                # 所以先处理一下
+                mp = {}
+                for i in range(len(x)):
+                    while x[i] in mp.keys():
+                        x[i] += 0.00001
+                    mp[x[i]] = True
+                mp = {}
+                for i in range(len(y)):
+                    while y[i] in mp.keys():
+                        y[i] += 0.00001
+                    mp[y[i]] = True
+                # try:
+
+                tck, u = splprep([x, y], k=3 if polygon.shape[0] >= 5 else 2, s=0)
+                # except Exception as e:
+                #     print(x, y, polygon.shape)
+                #     print('!!!!!!!!!!ERROR: t, c, o = _fitpack._parcur(ravel(transpose(x)), w, u, ub, ue, k,', e,
+                #           '!!!!!!!!!!')
+                #     continue
                 u = np.linspace(0, 1, num=n, endpoint=True)
                 out = splev(u, tck)
                 new_polygon = np.stack(out, axis=1).astype('float32')
@@ -335,12 +349,12 @@ class TPSTargets(TextSnakeTargets):
             # top_bot_l2r = np.concatenate([top_sideline, bot_sideline])
             cv2.fillPoly(mask, np.round(polygon).astype(np.int32), 1)
             # tps_coeff,build_P_hat,batch_inv_delta_C = self.cal_tps_signature(top_sideline, bot_sideline)
-            try:
-                tps_coeff = self.cal_tps_signature(top_sideline, bot_sideline)
-                tps_coeffs.append(np.insert(tps_coeff.view(-1), 0, poly_idx))
-            except Exception as e:
-                print('not enough values to unpack (expected 2, got 0)', e, '!!!!!!!!!!')
-                continue
+            # try:
+            tps_coeff = self.cal_tps_signature(top_sideline, bot_sideline)
+            tps_coeffs.append(np.insert(tps_coeff.view(-1), 0, poly_idx))
+            # except Exception as e:
+            #     print('not enough values to unpack (expected 2, got 0)', e, '!!!!!!!!!!')
+            #     continue
             yx = np.argwhere(mask > 0.5)
             y, x = yx[:, 0], yx[:, 1]
             batch_T = torch.zeros(h, w, self.num_fiducial + 3, 2)
