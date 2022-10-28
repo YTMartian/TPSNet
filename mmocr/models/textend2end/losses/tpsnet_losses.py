@@ -5,6 +5,7 @@ from torch import nn
 from mmocr.utils.tps_util import TPS
 from mmdet.core import multi_apply
 from mmdet.models.builder import LOSSES
+from pytorch3d.loss import chamfer_distance
 
 Pi = np.pi
 
@@ -12,10 +13,8 @@ Pi = np.pi
 @LOSSES.register_module()
 class TPSLoss(nn.Module):
     
-    def __init__(self, num_fiducial=8, num_sample=20, num_fiducial_gt=14, ohem_ratio=3., gauss_center=False,
-                 point_loss=False, with_BA=False, border_relax_thr=1.0, with_weight=True, with_area_weight=True
-                 , fiducial_dist="cross", steps=[8, 16, 32]
-                 ):
+    def __init__(self, num_fiducial=8, num_sample=20, num_fiducial_gt=14, ohem_ratio=3., gauss_center=False, point_loss=False, with_BA=False,
+                 border_relax_thr=1.0, with_weight=True, with_area_weight=True, fiducial_type="cross", steps=[8, 16, 32]):
         super().__init__()
         self.eps = 1e-6
         self.num_fiducial = num_fiducial
@@ -27,12 +26,12 @@ class TPSLoss(nn.Module):
         self.with_center_weight = with_weight
         self.with_area_weight = with_area_weight
         self.gauss_center = gauss_center
-        self.fiducial_dist = fiducial_dist
+        self.fiducial_type = fiducial_type
         self.steps = steps
         self.border_relax_thr = border_relax_thr
         
         self.tps_decoder_gt = TPS(num_fiducial_gt, num_points=num_sample if not self.with_BA else 5 * num_sample, grid_size=(2, 2))
-        self.tps_decoder = TPS(num_fiducial, num_points=num_sample, grid_size=(2, 2), fiducial_dist=fiducial_dist)
+        self.tps_decoder = TPS(num_fiducial, num_points=num_sample, grid_size=(2, 2), fiducial_type=fiducial_type)
     
     def forward(self, preds, _, p3_maps, p4_maps, p5_maps, polygons_area=None, **kwargs):
         
@@ -63,6 +62,7 @@ class TPSLoss(nn.Module):
         loss_tcl = torch.tensor(0., device=device, requires_grad=True).float()
         loss_point = torch.tensor(0., device=device, requires_grad=True).float()
         loss_ba = torch.tensor(0.0, device=device, requires_grad=True).float()
+        # loss_chamfer_distance = torch.tensor(0.0, device=device, requires_grad=True).float()
         
         for idx, loss in enumerate(losses):
             if idx == 0:
@@ -73,6 +73,8 @@ class TPSLoss(nn.Module):
                 loss_point = loss_point + sum(loss)
             elif idx == 3:
                 loss_ba = loss_ba + sum(loss)
+            # elif idx == 4:
+            #     loss_chamfer_distance = loss_chamfer_distance + sum(loss)
         
         results = dict(
             loss_text=loss_tr,
@@ -81,6 +83,7 @@ class TPSLoss(nn.Module):
         
         if self.with_point_loss:
             results['loss_point'] = loss_point
+            # results['loss_chamfer_distance'] = loss_chamfer_distance
         if self.with_BA:
             results['loss_ba'] = loss_ba
         
@@ -139,6 +142,7 @@ class TPSLoss(nn.Module):
         # regression loss
         loss_point = torch.tensor(0., device=device, requires_grad=True).float()
         loss_ba = torch.tensor(0., device=device, requires_grad=True).float()
+        loss_chamfer_distance = torch.tensor(0., device=device, requires_grad=True).float()
         num_pos = tr_train_mask.sum().item()
         if num_pos > 0 and (self.with_point_loss or self.with_BA):
             tps_map = tps_map[pos_idx]
@@ -164,7 +168,7 @@ class TPSLoss(nn.Module):
             else:
                 weight = weight * 1.0 / pos_idx.shape[0]
             
-            p_gt = self.tps_decoder_gt.build_P_border(tps_map)  # N * (n_sample*4) * 2
+            p_gt = self.tps_decoder_gt.build_P_border(tps_map)
             p_pre = self.tps_decoder.build_P_border(tps_pred)
             
             boder_gt = p_gt
@@ -181,11 +185,12 @@ class TPSLoss(nn.Module):
             if self.with_point_loss:
                 ft_x, ft_y = boder_gt[:, :, 0], boder_gt[:, :, 1]
                 ft_x_pre, ft_y_pre = boder_pre[:, :, 0], boder_pre[:, :, 1]
-                loss_reg_x = torch.sum(weight * F.smooth_l1_loss(ft_x_pre[:, :], ft_x[:, :], reduction='none').mean(dim=-1))
-                loss_reg_y = torch.sum(weight * F.smooth_l1_loss(ft_y_pre[:, :], ft_y[:, :], reduction='none').mean(dim=-1))
+                loss_reg_x = torch.sum(weight * F.smooth_l1_loss(ft_x_pre, ft_x, reduction='none').mean(dim=-1))
+                loss_reg_y = torch.sum(weight * F.smooth_l1_loss(ft_y_pre, ft_y, reduction='none').mean(dim=-1))
+                # loss_chamfer_distance = chamfer_distance(boder_gt, boder_pre)[0].mean()
                 loss_point = loss_reg_x + loss_reg_y
         
-        return loss_tr, loss_tcl, loss_point, loss_ba
+        return loss_tr, loss_tcl, loss_point, loss_ba  # , loss_chamfer_distance
     
     def ba_loss(self, pred_boundary, gt_boundary, scale):
         '''
@@ -206,17 +211,12 @@ class TPSLoss(nn.Module):
         n_pos = pos.float().sum()
         
         if n_pos.item() > 0:
-            loss_pos = F.cross_entropy(
-                predict[pos], target[pos], reduction='sum')
-            loss_neg = F.cross_entropy(
-                predict[neg], target[neg], reduction='none')
-            n_neg = min(
-                int(neg.float().sum().item()),
-                int(self.ohem_ratio * n_pos.float()))
+            loss_pos = F.cross_entropy(predict[pos], target[pos], reduction='sum')
+            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
+            n_neg = min(int(neg.float().sum().item()), int(self.ohem_ratio * n_pos.float()))
         else:
             loss_pos = torch.tensor(0.)
-            loss_neg = F.cross_entropy(
-                predict[neg], target[neg], reduction='none')
+            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
             n_neg = 100
         if len(loss_neg) > n_neg:
             loss_neg, _ = torch.topk(loss_neg, n_neg)

@@ -47,7 +47,7 @@ class TPSTargets(TextSnakeTargets):
         self.level_size_divisors = level_size_divisors
         self.level_proportion_range = level_proportion_range
         self.shrink_ratio = shrink_ratio
-        self.TPSGenerator = TPS(num_fiducial, tps_size, fiducial_dist="edge")
+        self.TPSGenerator = TPS(num_fiducial, tps_size, fiducial_type="edge")
         self.gauss_center = gauss_center
         self.reoder = reoder
         self.interp = interp

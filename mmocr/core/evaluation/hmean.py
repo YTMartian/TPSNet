@@ -25,7 +25,7 @@ def output_ranklist(img_results, img_infos, out_file):
     assert utils.is_type_list(img_infos, dict)
     assert isinstance(out_file, str)
     assert out_file.endswith('json')
-
+    
     sorted_results = []
     for idx, result in enumerate(img_results):
         name = img_infos[idx]['file_name']
@@ -34,9 +34,9 @@ def output_ranklist(img_results, img_infos, out_file):
         sorted_results.append(img_result)
     sorted_results = sorted(
         sorted_results, key=itemgetter('hmean'), reverse=False)
-
+    
     mmcv.dump(sorted_results, file=out_file)
-
+    
     return sorted_results
 
 
@@ -52,7 +52,7 @@ def get_gt_masks(ann_infos):
         gt_masks_ignore (list[list[list[int]]]): Ignored masks.
     """
     assert utils.is_type_list(ann_infos, dict)
-
+    
     gt_masks = []
     gt_masks_ignore = []
     for ann_info in ann_infos:
@@ -62,14 +62,14 @@ def get_gt_masks(ann_infos):
             assert len(mask[0]) >= 8 and len(mask[0]) % 2 == 0
             mask_gt.append(mask[0])
         gt_masks.append(mask_gt)
-
+        
         masks_ignore = ann_info['masks_ignore']
         mask_gt_ignore = []
         for mask_ignore in masks_ignore:
             assert len(mask_ignore[0]) >= 8 and len(mask_ignore[0]) % 2 == 0
             mask_gt_ignore.append(mask_ignore[0])
         gt_masks_ignore.append(mask_gt_ignore)
-
+    
     return gt_masks, gt_masks_ignore
 
 
@@ -101,9 +101,9 @@ def eval_hmean(results,
     assert utils.is_type_list(ann_infos, dict)
     assert len(results) == len(img_infos) == len(ann_infos)
     assert isinstance(metrics, set)
-
+    
     gts, gts_ignore = get_gt_masks(ann_infos)
-
+    
     preds = []
     pred_scores = []
     for result in results:
@@ -114,7 +114,7 @@ def eval_hmean(results,
             texts, scores, score_thr)
         preds.append(valid_texts)
         pred_scores.append(valid_text_scores)
-
+    
     eval_results = {}
     for metric in metrics:
         msg = f'Evaluating {metric}...'
@@ -126,16 +126,14 @@ def eval_hmean(results,
             thr = iter * 0.1
             top_preds = select_top_boundary(preds, pred_scores, thr)
             if metric == 'hmean-iou':
-                result, img_result = hmean_iou.eval_hmean_iou(
-                    top_preds, gts, gts_ignore)
+                result, img_result = hmean_iou.eval_hmean_iou(top_preds, gts, gts_ignore)
             elif metric == 'hmean-ic13':
-                result, img_result = hmean_ic13.eval_hmean_ic13(
-                    top_preds, gts, gts_ignore)
+                result, img_result = hmean_ic13.eval_hmean_ic13(top_preds, gts, gts_ignore)
             else:
                 raise NotImplementedError
             if rank_list is not None:
                 output_ranklist(img_result, img_infos, rank_list)
-
+            
             print_log(
                 'thr {0:.1f}, recall：{1[recall]:.3f}, '
                 'precision: {1[precision]:.3f}, '

@@ -8,15 +8,15 @@ from .grid_sample_batch.grid_sample_batch import grid_sample_batch
 
 class TPSAlign(nn.Module):
 
-    def __init__(self, num_fiducial,tps_size=(0.25,1),grid_size=(32,100), fiducial_dist='edge'):
+    def __init__(self, num_fiducial,tps_size=(0.25,1),grid_size=(32,100), fiducial_type='edge'):
         super(TPSAlign, self).__init__()
         self.num_fiducial = num_fiducial
         self.grid_size=grid_size
         self.tps_size = tps_size
-        self.fiducial_dist = fiducial_dist
+        self.fiducial_type = fiducial_type
         self.eps = 1e-5
 
-        self.tps_decoder = TPS(num_fiducial, tps_size,grid_size=grid_size, fiducial_dist=fiducial_dist)
+        self.tps_decoder = TPS(num_fiducial, tps_size,grid_size=grid_size, fiducial_type=fiducial_type)
 
 
     def forward(self,feature_map, grids, batch_idx, texts):

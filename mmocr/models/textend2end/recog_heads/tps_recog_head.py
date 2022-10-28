@@ -19,7 +19,7 @@ class TPSRecogHead(nn.Module, HeadMixin):
                  sample_size=(32, 100), convertor=None, loss=None,
                  nms_thr=0.1, from_p2=True,
                  with_coord=False, image_size=(800, 800), num_convs=2, add_gt=True,
-                 num_sample_per_ins=2, fiducial_dist='cross',
+                 num_sample_per_ins=2, fiducial_type='cross',
                  ):
         super(TPSRecogHead, self).__init__()
         if encoder is not None:
@@ -35,13 +35,13 @@ class TPSRecogHead(nn.Module, HeadMixin):
         self.num_fiducial_gt = num_fiducial_gt
         self.num_sample_per_ins = num_sample_per_ins
         self.sample_size = sample_size
-        self.fiducial_dist = fiducial_dist
+        self.fiducial_type = fiducial_type
         self.nms_thr = nms_thr
         self.from_p2 = from_p2
         self.add_gt = add_gt
         self.img_w, self.img_h = image_size
         self.tpsalign_gt = TPSAlign(num_fiducial_gt, grid_size=sample_size)
-        self.tpsalign = TPSAlign(num_fiducial, grid_size=sample_size, fiducial_dist=fiducial_dist)
+        self.tpsalign = TPSAlign(num_fiducial, grid_size=sample_size, fiducial_type=fiducial_type)
 
         loss.update(ignore_index=self.convertor.padding_idx)
         self.loss_recog = build_loss(loss)

@@ -33,7 +33,7 @@ model = dict(
         loss=dict(type='TPSLoss',gauss_center=False,
                   point_loss=True, with_BA=False, ),
         num_fiducial=num_fiducial,
-        fiducial_dist="cross",
+        fiducial_type="cross",
         num_convs=4),
     recog_head=dict(
         type='TPSRecogHead',
@@ -51,7 +51,7 @@ model = dict(
         num_sample_per_ins=1,
         image_size=(960,960),
         num_fiducial=num_fiducial,
-        fiducial_dist='cross',
+        fiducial_type='cross',
         sample_size=(8,32),
         add_gt =True,
         convertor=dict(type='AttnConvertor', lower=True, max_seq_len=25,

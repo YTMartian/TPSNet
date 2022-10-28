@@ -1,6 +1,6 @@
 find_unused_parameters = True
 num_fiducial = 8
-tps_size = (0.25, 1)
+tps_size = (0.25, 1.0)
 model = dict(
     type='TPSNet',
     from_p2=True,
@@ -33,7 +33,7 @@ model = dict(
         loss=dict(type='TPSLoss', gauss_center=True,
                   point_loss=True, with_BA=False, border_relax_thr=0.8),
         num_fiducial=num_fiducial,
-        fiducial_dist="edge",
+        fiducial_type="edge",
         num_convs=4),
     recog_head=dict(
         type='TPSRecogHead',
@@ -51,7 +51,7 @@ model = dict(
         num_sample_per_ins=2,
         image_size=(960, 960),
         num_fiducial=num_fiducial,
-        fiducial_dist='cross',
+        fiducial_type='edge',
         sample_size=(8, 32),
         add_gt=True,
         convertor=dict(type='AttnConvertor', lower=True, max_seq_len=25,
@@ -87,13 +87,13 @@ train_pipeline = [
         type='RandomCropPolyInstances',
         instance_key='gt_masks',
         crop_ratio=0.8,
-        min_side_ratio=0.1),
+        min_side_ratio=0.3),
     dict(
         type='RandomRotatePolyInstances',
         rotate_ratio=0.5,
         max_angle=30,
         pad_with_fixed_color=False),
-    dict(type='SquareResizePad', target_size=960, pad_ratio=0.6),
+    dict(type='SquareResizePad', target_size=800, pad_ratio=0.6),
     dict(type='RandomFlip', flip_ratio=0.0, direction='horizontal'),
     dict(type='Pad', size_divisor=32),
     dict(
@@ -131,10 +131,10 @@ data_roots = ['/home/tim/DataSets/CTW1500/mmocr-ctw1500800x800/',
               '/home/tim/DataSets/TotalText/origin/',
               ]
 
-data_root = data_roots[1]
+data_root = data_roots[0]
 
 data = dict(
-    samples_per_gpu=2,
+    samples_per_gpu=4,
     workers_per_gpu=4,
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1),
@@ -173,7 +173,7 @@ log_config = dict(
     interval=20,
     hooks=[
         dict(type='TextLoggerHook')
-
+    
     ])
 # yapf:enable
 dist_params = dict(backend='nccl')
