@@ -107,7 +107,7 @@ train_pipeline = [
         type='CustomFormatBundle',
         keys=['polygons_area', 'lv_tps_coeffs'],
         visualize=dict(flag=False, boundary_key=None)),
-    dict(type='Collect', keys=['img', 'p3_maps', 'p4_maps', 'p5_maps', 'polygons_area', 'lv_tps_coeffs'])
+    dict(type='Collect', keys=['img', 'p3_maps', 'p4_maps', 'p5_maps', 'polygons_area', 'lv_tps_coeffs', 'seg_mask'])
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
@@ -135,7 +135,7 @@ data_root = data_roots[0]
 
 data = dict(
     samples_per_gpu=4,
-    workers_per_gpu=4,
+    workers_per_gpu=1,
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1),
     train=dict(

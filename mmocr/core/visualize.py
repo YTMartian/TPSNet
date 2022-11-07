@@ -197,11 +197,14 @@ def imshow_pred_boundary(img,
     for boundary, score in zip(boundaries, scores):
         boundary_int = np.array(boundary).astype(np.int32)
 
-        cv2.polylines(
-            img, [boundary_int.reshape(-1, 1, 2)],
-            True,
-            color=boundary_color,
-            thickness=thickness)
+        # cv2.polylines(
+        #     img, [boundary_int.reshape(-1, 1, 2)],
+        #     True,
+        #     color=boundary_color,
+        #     thickness=thickness)
+        mask = np.zeros(img.shape, img.dtype)
+        cv2.drawContours(mask, [boundary_int.reshape(-1, 1, 2)], -1, (0, 176, 0, 255), thickness=-1)
+        img = cv2.addWeighted(img, 1.0, mask, 0.7, 0)
 
         if show_score:
             label_text = f'{score:.02f}'
@@ -267,11 +270,12 @@ def imshow_text_char_boundary(img,
             color=text_color,
             thickness=thickness)
         if boundary.shape[0] > 0:
-            cv2.polylines(
-                img, [boundary.reshape(-1, 1, 2)],
-                True,
-                color=text_color,
-                thickness=thickness)
+            # cv2.polylines(
+            #     img, [boundary.reshape(-1, 1, 2)],
+            #     True,
+            #     color=text_color,
+            #     thickness=thickness)
+            cv2.drawContours(img, [boundary.reshape(-1, 1, 2)], -1, (0, 255, 0, 255), thickness=-1)
 
         for b in char_box:
             b = np.array(b)

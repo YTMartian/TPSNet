@@ -13,6 +13,8 @@ from mmocr.utils.tps_util import TPS
 import pyclipper
 from mmcv.parallel import DataContainer as DC
 from mmdet.datasets.builder import PIPELINES
+import cv2
+from torchvision.transforms import ToPILImage
 
 
 # from shapely.geometry import Polygon
@@ -20,7 +22,7 @@ from mmdet.datasets.builder import PIPELINES
 
 @PIPELINES.register_module()
 class TPSTargets(TextSnakeTargets):
-
+    
     def __init__(self,
                  num_fiducial=14,
                  resample_step=4.0,
@@ -34,7 +36,7 @@ class TPSTargets(TextSnakeTargets):
                  reoder=False,
                  shrink_ratio=0.4,
                  ):
-
+        
         super().__init__()
         assert isinstance(level_size_divisors, tuple)
         assert isinstance(level_proportion_range, tuple)
@@ -62,7 +64,7 @@ class TPSTargets(TextSnakeTargets):
             Z = clf.pdf(np.dstack([XX, YY])).reshape(div, div)
             mask = Z / Z.max()
             self.gauss_mask = mask
-
+    
     def generate_center_region_mask(self, img_size, text_polys):
         """Generate text center region mask.
 
@@ -73,14 +75,14 @@ class TPSTargets(TextSnakeTargets):
         Returns:
             center_region_mask (ndarray): The text center region mask.
         """
-
+        
         assert isinstance(img_size, tuple)
         assert check_argument.is_2dlist(text_polys)
-
+        
         h, w = img_size
-
+        
         center_region_mask = np.zeros((h, w), np.uint8)
-
+        
         center_region_boxes = []
         for poly in text_polys:
             assert len(poly) == 1
@@ -90,7 +92,7 @@ class TPSTargets(TextSnakeTargets):
                 top_line, bot_line, self.resample_step)
             # resampled_bot_line = resampled_bot_line[::-1]
             center_line = (resampled_top_line + resampled_bot_line) / 2
-
+            
             line_head_shrink_len = norm(resampled_top_line[0] -
                                         resampled_bot_line[0]) / 4.0
             line_tail_shrink_len = norm(resampled_top_line[-1] -
@@ -104,7 +106,7 @@ class TPSTargets(TextSnakeTargets):
                                      head_shrink_num:len(resampled_top_line) - tail_shrink_num]
                 resampled_bot_line = resampled_bot_line[
                                      head_shrink_num:len(resampled_bot_line) - tail_shrink_num]
-
+            
             for i in range(0, len(center_line) - 1):
                 tl = center_line[i] + (resampled_top_line[i] - center_line[i]
                                        ) * self.center_region_shrink_ratio
@@ -119,16 +121,16 @@ class TPSTargets(TextSnakeTargets):
                 current_center_box = np.vstack([tl, tr, br,
                                                 bl]).astype(np.int32)
                 center_region_boxes.append(current_center_box)
-
+        
         cv2.fillPoly(center_region_mask, center_region_boxes, 1)
         return center_region_mask
-
+    
     def generate_gauss_center_region_mask(self, img_size, text_polys, size_divisor):
         assert isinstance(img_size, tuple)
         assert check_argument.is_2dlist(text_polys)
-
+        
         h, w = img_size
-
+        
         center_region_mask = np.zeros((h, w), np.float32)
         for poly in text_polys:
             gauss_center_mask = self.generate_gauss(img_size, poly, size_divisor)
@@ -142,7 +144,7 @@ class TPSTargets(TextSnakeTargets):
         if center_region_mask.max() > 1:
             print(center_region_mask)
         return center_region_mask
-
+    
     def generate_gauss(self, img_size, text_poly, size_divisor):
         head_edge, tail_edge, top_sideline, bot_sideline = self.reorder_poly_edge(text_poly[0].reshape(-1, 2))
         # try:
@@ -169,7 +171,7 @@ class TPSTargets(TextSnakeTargets):
         img = tps.warpImage(mask)
         img = cv2.resize(img, (h, w))
         return img
-
+    
     def get_p(self, top_line, bot_line, h, w):
         top_l = np.cumsum(norm(top_line[1:] - top_line[:-1], 2, axis=-1))
         top_l = np.insert(top_l, 0, 0)
@@ -179,13 +181,13 @@ class TPSTargets(TextSnakeTargets):
         bot_l = np.insert(bot_l, 0, 0)
         bot_x = (bot_l / bot_l[-1]) * (w - 1)
         bot_y = np.ones(len(top_line)) * (h - 1)
-
+        
         top_p = np.stack((top_x, top_y), -1)
         bot_p = np.stack((bot_x, bot_y), -1)
-
+        
         p = np.concatenate((top_p, bot_p), 0)
         return p
-
+    
     def resample_polygon(self, top_line, bot_line, n=None):
         """Resample one polygon with n points on its boundary.
 
@@ -214,7 +216,7 @@ class TPSTargets(TextSnakeTargets):
                         y[i] += 0.00001
                     mp[y[i]] = True
                 # try:
-
+                
                 tck, u = splprep([x, y], k=3 if polygon.shape[0] >= 5 else 2, s=0)
                 # except Exception as e:
                 #     print(x, y, polygon.shape)
@@ -227,15 +229,15 @@ class TPSTargets(TextSnakeTargets):
             else:
                 new_polygon = self.resample_line(polygon, n - 1)
             resample_line.append(np.array(new_polygon))
-
+        
         return resample_line  # top line, bot line
-
+    
     def normalize_polygon(self, polygon):
-
+        
         temp_polygon = polygon - polygon.mean(axis=0)
-
+        
         return temp_polygon / 32
-
+    
     def poly2T(self, polygon):
         """Convert polygon to tps cofficients
 
@@ -249,12 +251,12 @@ class TPSTargets(TextSnakeTargets):
         C_prime = polygon.reshape((1, -1, 2))
         T = self.TPSGenerator.solve_T(C_prime)
         return T
-
+    
     def poly2rotate_rect(self, polygon):
         rect = cv2.minAreaRect(polygon)
         box = cv2.boxPoints(rect)
         return box
-
+    
     def clockwise(self, head_edge, tail_edge, top_sideline, bot_sideline):
         hc = head_edge.mean(axis=0)
         tc = tail_edge.mean(axis=0)
@@ -272,7 +274,7 @@ class TPSTargets(TextSnakeTargets):
         if not self.with_direction and direction == 1 and top_sideline[0, direction] < top_sideline[-1, direction]:
             top_indx = np.arange(top_sideline.shape[0] - 1, -1, -1)
             top_sideline = top_sideline[top_indx]
-
+        
         if bot_sideline[0, direction] > bot_sideline[-1, direction]:
             bot_indx = np.arange(bot_sideline.shape[0] - 1, -1, -1)
         else:
@@ -283,19 +285,19 @@ class TPSTargets(TextSnakeTargets):
             bot_sideline = bot_sideline[bot_indx]
         if top_sideline[:, 1 - direction].mean() > bot_sideline[:, 1 - direction].mean():
             top_sideline, bot_sideline = bot_sideline, top_sideline
-
+        
         if not self.with_direction:
             direction = 0
         return top_sideline, bot_sideline, direction
-
+    
     def cal_tps_signature(self, top_line, bot_line):
         resample_top_line, resample_bot_line = self.resample_polygon(top_line, bot_line)
         resampled_polygon = np.concatenate([resample_top_line, resample_bot_line])
         assert resampled_polygon.shape[0] == self.num_fiducial, "resample failed"
         tps_coeff = self.poly2T(resampled_polygon)
-
+        
         return tps_coeff.view(-1, 1)
-
+    
     def reorder_poly_edge(self, points):
         """Get the respective points composing head edge, tail edge, top
         sideline and bottom sideline.
@@ -313,7 +315,7 @@ class TPSTargets(TextSnakeTargets):
             bot_sideline (ndarray): The points composing bottom curved sideline
                 of text polygon.
         """
-
+        
         assert points.ndim == 2
         assert points.shape[0] >= 4
         assert points.shape[1] == 2
@@ -329,12 +331,12 @@ class TPSTargets(TextSnakeTargets):
             head_edge = np.stack((top_sideline[0], bot_sideline[0]), 0)
             tail_edge = np.stack((top_sideline[-1], bot_sideline[-1]), 0)
         return head_edge, tail_edge, top_sideline, bot_sideline
-
+    
     def generate_tps_maps(self, img_size, text_polys, text_polys_idx=None, img=None, level_size=None):
-
+        
         assert isinstance(img_size, tuple)
         assert check_argument.is_2dlist(text_polys)
-
+        
         h, w = img_size
         coeff_maps = np.zeros((2 * self.num_fiducial + 6, h, w), dtype=np.float32)
         tps_coeffs = []
@@ -362,13 +364,13 @@ class TPSTargets(TextSnakeTargets):
             batch_T[y, x, 0, :] = batch_T[y, x, 0, :] - yx[:, [1, 0]].astype(np.float32)
             batch_T = batch_T.view(h, w, -1).permute(2, 0, 1)
             coeff_maps[:, y, x] = batch_T[:, y, x]
-
+        
         if len(tps_coeffs) > 0:
             tps_coeffs = np.stack(tps_coeffs, 0)
         else:
             tps_coeffs = np.array([])
         return coeff_maps, tps_coeffs
-
+    
     def generate_text_region_mask(self, img_size, text_polys, text_polys_idx):
         """Generate text center region mask and geometry attribute maps.
 
@@ -379,13 +381,12 @@ class TPSTargets(TextSnakeTargets):
         Returns:
             text_region_mask (ndarray): The text region mask.
         """
-
+        
         assert isinstance(img_size, tuple)
         assert check_argument.is_2dlist(text_polys)
-
+        
         h, w = img_size
         text_region_mask = np.zeros((h, w), dtype=np.uint8)
-
         for poly, poly_idx in zip(text_polys, text_polys_idx):
             assert len(poly) == 1
             text_instance = [[poly[0][i], poly[0][i + 1]]
@@ -397,8 +398,12 @@ class TPSTargets(TextSnakeTargets):
             else:
                 cv2.fillPoly(text_region_mask, polygon, 1)
         return text_region_mask
-
+    
     def generate_level_targets(self, img_size, text_polys, ignore_polys, img=None):
+        mask = self.generate_text_region_mask(img.shape[:2], text_polys, [1] * len(text_polys))
+        # cv2.imshow('mask', mask * 255)
+        # cv2.imshow('img', img)
+        # cv2.waitKey(0)
         """Generate ground truth target on each level.
 
         Args:
@@ -423,24 +428,23 @@ class TPSTargets(TextSnakeTargets):
         lv_tps_coeffs = [[] for i in range(len(lv_size_divs))]
         for poly_idx, poly in enumerate(text_polys):
             assert len(poly) == 1
-            text_instance = [[poly[0][i], poly[0][i + 1]]
-                             for i in range(0, len(poly[0]), 2)]
+            text_instance = [[poly[0][i], poly[0][i + 1]] for i in range(0, len(poly[0]), 2)]
             polygon = np.array(text_instance, dtype=np.int).reshape((1, -1, 2))
             tl_x, tl_y, box_w, box_h = cv2.boundingRect(polygon)
             # assert box_w <= 200 or box_h <= 200, 'Box out of range'
             # max_l = max(box_h, box_w)
-
+            
             proportion = max(box_h, box_w) / (h + 1e-8)
-
+            
             for ind, proportion_range in enumerate(lv_proportion_range):
                 if proportion_range[0] < proportion < proportion_range[1]:
                     lv_text_polys[ind].append([poly[0] / lv_size_divs[ind]])
                     lv_text_polys_idx[ind].append(poly_idx + 1)
-
+            
             if self.with_area:
                 polygon_area = Polygon.Polygon(poly[0].reshape(-1, 2)).area()
                 polygons_area.append(polygon_area)
-
+        
         for ignore_poly in ignore_polys:
             assert len(ignore_poly) == 1
             text_instance = [[ignore_poly[0][i], ignore_poly[0][i + 1]]
@@ -448,48 +452,44 @@ class TPSTargets(TextSnakeTargets):
             polygon = np.array(text_instance, dtype=np.int).reshape((1, -1, 2))
             _, _, box_w, box_h = cv2.boundingRect(polygon)
             proportion = max(box_h, box_w) / (h + 1e-8)
-
+            
             for ind, proportion_range in enumerate(lv_proportion_range):
                 if proportion_range[0] < proportion < proportion_range[1]:
                     lv_ignore_polys[ind].append(
                         [ignore_poly[0] / lv_size_divs[ind]])
-
+        
         for ind, size_divisor in enumerate(lv_size_divs):
             current_level_maps = []
             level_img_size = (h // size_divisor, w // size_divisor)
-            text_region = self.generate_text_region_mask(
-                level_img_size, lv_text_polys[ind], lv_text_polys_idx[ind])[None]
+            text_region = self.generate_text_region_mask(level_img_size, lv_text_polys[ind], lv_text_polys_idx[ind])[None]  # [None]:增加一维
+            
             current_level_maps.append(text_region)
-
+            
             if self.gauss_center:
-                center_region = self.generate_gauss_center_region_mask(
-                    level_img_size, lv_text_polys[ind], size_divisor)[None]
+                center_region = self.generate_gauss_center_region_mask(level_img_size, lv_text_polys[ind], size_divisor)[None]
             else:
-                center_region = self.generate_center_region_mask(
-                    level_img_size, lv_text_polys[ind])[None]
+                center_region = self.generate_center_region_mask(level_img_size, lv_text_polys[ind])[None]
             current_level_maps.append(center_region)
-
-            effective_mask = self.generate_effective_mask(
-                level_img_size, lv_ignore_polys[ind])[None]
+            
+            effective_mask = self.generate_effective_mask(level_img_size, lv_ignore_polys[ind])[None]
             current_level_maps.append(effective_mask)
-
-            tps_coeff_maps, tps_coeffs = self.generate_tps_maps(
-                level_img_size, lv_text_polys[ind], lv_text_polys_idx[ind])
-
+            
+            tps_coeff_maps, tps_coeffs = self.generate_tps_maps(level_img_size, lv_text_polys[ind], lv_text_polys_idx[ind])
+            
             current_level_maps.append(tps_coeff_maps)
             lv_tps_coeffs[ind] = tps_coeffs
-
+            
             level_maps.append(np.concatenate(current_level_maps))
-
+        
         if self.with_area and len(polygons_area) > 0:
             polygons_area = np.array(polygons_area)
         else:
             polygons_area = np.array([])
-
+        
         lv_text_polys_idx = [np.array(l) for l in lv_text_polys_idx]
-
-        return level_maps, lv_text_polys_idx, polygons_area, lv_tps_coeffs
-
+        
+        return level_maps, lv_text_polys_idx, polygons_area, lv_tps_coeffs, mask
+    
     def generate_targets(self, results):
         """Generate the ground truth targets for FCENet.
 
@@ -499,18 +499,15 @@ class TPSTargets(TextSnakeTargets):
         Returns:
             results (dict): The output result dictionary.
         """
-
+        
         assert isinstance(results, dict)
-
+        
         polygon_masks = results['gt_masks'].masks
         polygon_masks_ignore = results['gt_masks_ignore'].masks
         # gt_texts = results['texts']
         h, w, _ = results['img_shape']
-
-        level_maps, lv_text_polys_idx, polygons_area, lv_tps_coeffs = self.generate_level_targets((h, w), polygon_masks,
-                                                                                                  polygon_masks_ignore,
-                                                                                                  results['img'])
-
+        level_maps, lv_text_polys_idx, polygons_area, lv_tps_coeffs, seg_mask = self.generate_level_targets((h, w), polygon_masks, polygon_masks_ignore, results['img'])
+        
         results['mask_fields'].clear()  # rm gt_masks encoded by polygons
         mapping = {
             'p3_maps': level_maps[0],
@@ -519,11 +516,12 @@ class TPSTargets(TextSnakeTargets):
             'lv_text_polys_idx': lv_text_polys_idx,
             'polygons_area': polygons_area,
             # 'gt_texts': DC(gt_texts, cpu_only=True),
-            'lv_tps_coeffs': lv_tps_coeffs
+            'lv_tps_coeffs': lv_tps_coeffs,
+            'seg_mask': seg_mask
         }
         if len(self.level_size_divisors) == 4:
             mapping['p6_maps'] = level_maps[3]
         for key, value in mapping.items():
             results[key] = value
-
+        
         return results

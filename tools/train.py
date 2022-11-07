@@ -36,13 +36,13 @@ def parse_args():
         '--gpus',
         type=int,
         help='Number of gpus to use '
-        '(only applicable to non-distributed training).')
+             '(only applicable to non-distributed training).')
     group_gpus.add_argument(
         '--gpu-ids',
         type=int,
         nargs='+',
         help='ids of gpus to use '
-        '(only applicable to non-distributed training).')
+             '(only applicable to non-distributed training).')
     parser.add_argument('--seed', type=int, default=None, help='Random seed.')
     parser.add_argument(
         '--deterministic',
@@ -53,18 +53,18 @@ def parse_args():
         nargs='+',
         action=DictAction,
         help='Override some settings in the used config, the key-value pair '
-        'in xxx=yyy format will be merged into config file (deprecate), '
-        'change to --cfg-options instead.')
+             'in xxx=yyy format will be merged into config file (deprecate), '
+             'change to --cfg-options instead.')
     parser.add_argument(
         '--cfg-options',
         nargs='+',
         action=DictAction,
         help='Override some settings in the used config, the key-value pair '
-        'in xxx=yyy format will be merged into config file. If the value to '
-        'be overwritten is a list, it should be of the form of either '
-        'key="[a,b]" or key=a,b .The argument also allows nested list/tuple '
-        'values, e.g. key="[(a,b),(c,d)]". Note that the quotation marks '
-        'are necessary and that no white space is allowed.')
+             'in xxx=yyy format will be merged into config file. If the value to '
+             'be overwritten is a list, it should be of the form of either '
+             'key="[a,b]" or key=a,b .The argument also allows nested list/tuple '
+             'values, e.g. key="[(a,b),(c,d)]". Note that the quotation marks '
+             'are necessary and that no white space is allowed.')
     parser.add_argument(
         '--launcher',
         choices=['none', 'pytorch', 'slurm', 'mpi'],
@@ -76,11 +76,11 @@ def parse_args():
         type=str,
         default='',
         help='Memory cache config for image loading speed-up during training.')
-
+    
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
-
+    
     if args.options and args.cfg_options:
         raise ValueError(
             '--options and --cfg-options cannot be both '
@@ -88,17 +88,17 @@ def parse_args():
     if args.options:
         warnings.warn('--options is deprecated in favor of --cfg-options')
         args.cfg_options = args.options
-
+    
     return args
 
 
 def main():
     args = parse_args()
-
+    
     cfg = Config.fromfile(args.config)
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
-
+    
     # update mc config
     if args.mc_config:
         mc = Config.fromfile(args.mc_config)
@@ -109,7 +109,7 @@ def main():
         else:
             cfg.data.train.pipeline[0].update(
                 file_client_args=mc['mc_file_client_args'])
-
+    
     # import modules from string list.
     if cfg.get('custom_imports', None):
         from mmcv.utils import import_modules_from_strings
@@ -117,7 +117,7 @@ def main():
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
-
+    
     # work_dir is determined in this priority: CLI > segment in file > filename
     if args.work_dir is not None:
         # update configs according to CLI args if args.work_dir is not None
@@ -134,7 +134,7 @@ def main():
         cfg.gpu_ids = args.gpu_ids
     else:
         cfg.gpu_ids = range(1) if args.gpus is None else range(args.gpus)
-
+    
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False
@@ -144,7 +144,7 @@ def main():
         # re-set gpu_ids with distributed training mode
         _, world_size = get_dist_info()
         cfg.gpu_ids = range(world_size)
-
+    
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
     # dump config
@@ -153,7 +153,7 @@ def main():
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
     log_file = osp.join(cfg.work_dir, f'{timestamp}.log')
     logger = get_root_logger(log_file=log_file, log_level=cfg.log_level)
-
+    
     # init the meta dict to record some important information such as
     # environment info and seed, which will be logged
     meta = dict()
@@ -168,7 +168,7 @@ def main():
     # log some basic info
     logger.info(f'Distributed training: {distributed}')
     logger.info(f'Config:\n{cfg.pretty_text}')
-
+    
     # set random seeds
     if args.seed is not None:
         logger.info(f'Set random seed to {args.seed}, '
@@ -177,13 +177,13 @@ def main():
     cfg.seed = args.seed
     meta['seed'] = args.seed
     meta['exp_name'] = osp.basename(args.config)
-
+    
     model = build_detector(
         cfg.model,
         train_cfg=cfg.get('train_cfg'),
         test_cfg=cfg.get('test_cfg'))
     model.init_weights()
-
+    
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
@@ -191,7 +191,7 @@ def main():
             train_pipeline = cfg.data.train['datasets'][0].pipeline
         else:
             train_pipeline = cfg.data.train.pipeline
-
+        
         if val_dataset['type'] == 'ConcatDataset':
             for dataset in val_dataset['datasets']:
                 dataset.pipeline = train_pipeline
@@ -206,6 +206,9 @@ def main():
             CLASSES=datasets[0].CLASSES)
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
+    
+    torch.manual_seed(3407)  # 试试这个
+    
     train_detector(
         model,
         datasets,
