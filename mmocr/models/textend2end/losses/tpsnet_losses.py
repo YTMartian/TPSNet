@@ -19,7 +19,6 @@ class TPSLoss(nn.Module):
         self.num_fiducial = num_fiducial
         self.num_fiducial_gt = num_fiducial_gt
         self.num_sample = num_sample
-        self.ohem_ratio = ohem_ratio
         self.with_point_loss = point_loss
         self.with_center_weight = with_weight
         self.with_area_weight = with_area_weight
@@ -68,10 +67,6 @@ class TPSLoss(nn.Module):
             results['loss_point'] = loss_point
         
         return results
-    
-    def smooth_ce_loss(self, preds, targets):
-        log_preds = -F.log_softmax(preds, dim=-1)
-        return targets * log_preds[:, 1] + (1 - targets) * log_preds[:, 0]
     
     def forward_single(self, pred, gt, downsample_rate=None, areas=None):
         cls_pred = pred[0].permute(0, 2, 3, 1).contiguous()
@@ -144,22 +139,3 @@ class TPSLoss(nn.Module):
                 loss_point = loss_reg_x + loss_reg_y
         
         return loss_point, None
-    
-    def ohem(self, predict, target, train_mask):
-        pos = (target * train_mask).bool()
-        neg = ((1 - target) * train_mask).bool()
-        
-        n_pos = pos.float().sum()
-        
-        if n_pos.item() > 0:
-            loss_pos = F.cross_entropy(predict[pos], target[pos], reduction='sum')
-            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
-            n_neg = min(int(neg.float().sum().item()), int(self.ohem_ratio * n_pos.float()))
-        else:
-            loss_pos = torch.tensor(0.)
-            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
-            n_neg = 100
-        if len(loss_neg) > n_neg:
-            loss_neg, _ = torch.topk(loss_neg, n_neg)
-        
-        return (loss_pos + loss_neg.sum()) / (n_pos + n_neg).float()

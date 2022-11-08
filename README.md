@@ -16,6 +16,20 @@ pip install -r requirements.txt
 python setup.py build develop
 cd mmocr/models/textend2end/utils/grid_sample_batch
 python setup.py build develop
+
+modify site-packages/mmdet/models/detectors SingleStageDetector()
+
+def extract_feat(self, img, is_get_c1_c4=False):
+    """Directly extract features from the backbone+neck."""
+    x = self.backbone(img)
+    if is_get_c1_c4:
+        c1, c4 = x[0], x[3]
+    if self.with_neck:
+        x = self.neck(x)
+    if is_get_c1_c4:
+        return x, c1, c4
+    return x
+
 ```
 
 ## Dataset

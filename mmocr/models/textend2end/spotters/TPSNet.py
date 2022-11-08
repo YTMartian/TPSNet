@@ -209,6 +209,7 @@ class TPSNet(FCENet):
         # self.seg_criterion = OhemCrossEntropy2d(ignore_index=255)
         self.seg_model = DeepLabV3Plus(nclass=2)
         self.count_ = 0
+        self.show_result = True
     
     def forward_train(self, img, img_metas, **kwargs):
         """
@@ -232,11 +233,13 @@ class TPSNet(FCENet):
         h, w = seg_mask.shape[1:]
         seg_pred = self.seg_model(h, w, c1, c4)
         seg_loss = self.seg_criterion(seg_pred, seg_mask)
-        if self.count_ % 2 == 0:
+        if self.show_result and self.count_ % 2 == 0:
             seg_pred = torch.argmax(seg_pred, dim=1)
             cv2.imshow('target', np.array(ToPILImage()(seg_mask[0].cpu().type(torch.uint8))) * 255)
             cv2.imshow('pred', np.array(ToPILImage()(seg_pred[0].cpu().type(torch.uint8))) * 255)
-            cv2.waitKey(1)
+            # shrink_2 = seg_pred[0][::2, ::2]
+            # cv2.imshow('shrink_2', np.array(ToPILImage()(shrink_2.cpu().type(torch.uint8))) * 255)
+            cv2.waitKey(0)
         self.count_ += 1
         
         losses['loss_seg'] = seg_loss
