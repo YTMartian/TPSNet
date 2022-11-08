@@ -10,6 +10,88 @@ import torch.nn.functional as F
 
 
 @DETECTORS.register_module()
+class OhemCELoss(nn.Module):
+    def __init__(self, num_classes=2, ohem_ratio=3.0, ignore_index=255, min_kept=100000):
+        super(OhemCELoss, self).__init__()
+        self.num_classes = num_classes
+        self.ohem_ratio = ohem_ratio
+        self.ignore_index = ignore_index
+        self.min_kept = min_kept
+    
+    def forward(self, predict, target):
+        device = target.device
+        predict = F.softmax(predict, dim=1)
+        
+        predict = predict.permute(0, 2, 3, 1).contiguous().view(-1, self.num_classes)  # 注意要先permute
+        target = target.view(-1)
+        
+        mask = target.ne(self.ignore_index).long()  # not equal: 等同于mask = (target != self.ignore_index).long()
+        pos = (target * mask).bool()
+        neg = ((1 - target) * mask).bool()
+        
+        n_pos = pos.float().sum()
+        
+        if n_pos.item() > 0:
+            loss_pos = F.cross_entropy(predict[pos], target[pos], reduction='sum')
+            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
+            # n_neg = min(int(neg.float().sum().item()), int(self.ohem_ratio * n_pos.float()))
+            n_neg = min(int(neg.float().sum().item()), self.min_kept)
+        else:
+            loss_pos = torch.tensor(0.).to(device)
+            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
+            n_neg = 100
+        if len(loss_neg) > n_neg:
+            loss_neg, _ = torch.topk(loss_neg, n_neg)
+        
+        return (loss_pos + loss_neg.sum()) / (n_pos + n_neg).float()
+
+
+@DETECTORS.register_module()
+class OhemCrossEntropy2d(nn.Module):
+    def __init__(self, ignore_index=-1, thresh=0.7, min_kept=100000, use_weight=False, ohem_ratio=3.0):
+        super(OhemCrossEntropy2d, self).__init__()
+        self.ignore_index = ignore_index
+        self.thresh = float(thresh)
+        self.min_kept = int(min_kept)
+        self.ohem_ratio = ohem_ratio
+        if use_weight:
+            weight = torch.FloatTensor(
+                [0.8373, 0.918, 0.866, 1.0345, 1.0166, 0.9969, 0.9754,
+                 1.0489, 0.8786, 1.0023, 0.9539, 0.9843, 1.1116, 0.9037,
+                 1.0865, 1.0955, 1.0865, 1.1529, 1.0507]).cuda()
+            self.criterion = torch.nn.CrossEntropyLoss(weight=weight, ignore_index=ignore_index)
+        else:
+            self.criterion = torch.nn.CrossEntropyLoss(ignore_index=ignore_index)
+    
+    def forward(self, pred, target):
+        n, c, h, w = pred.size()
+        target = target.view(-1)
+        valid_mask = target.ne(self.ignore_index)
+        target = target * valid_mask
+        num_valid = valid_mask.sum()
+        prob = F.softmax(pred, dim=1)
+        prob = prob.transpose(0, 1).reshape(c, -1)
+        
+        n_pos = target.float().sum()
+        
+        prob = prob.masked_fill_(torch.tensor(1 - valid_mask.int(), dtype=torch.uint8), 1)
+        mask_prob = prob[target, torch.arange(len(target), dtype=torch.long)]
+        threshold = self.thresh
+        if self.min_kept > 0:
+            index = mask_prob.argsort()
+            threshold_index = index[min(len(index), self.min_kept) - 1]
+            # threshold_index = index[min(len(index), int(self.ohem_ratio * n_pos)) - 1]
+            if mask_prob[threshold_index] > self.thresh:
+                threshold = mask_prob[threshold_index]
+        kept_mask = mask_prob.le(threshold)
+        valid_mask = valid_mask * kept_mask
+        target = target * kept_mask.long()
+        target = target.masked_fill_(torch.tensor(1 - valid_mask.int(), dtype=torch.uint8), self.ignore_index)
+        target = target.view(n, h, w)
+        return self.criterion(pred, target)
+
+
+@DETECTORS.register_module()
 class DeepLabV3Plus(nn.Module):
     def __init__(self, nclass):
         super(DeepLabV3Plus, self).__init__()
@@ -124,6 +206,7 @@ class TPSNet(FCENet):
         self.from_p2 = from_p2
         
         self.seg_criterion = nn.CrossEntropyLoss(ignore_index=255)
+        # self.seg_criterion = OhemCrossEntropy2d(ignore_index=255)
         self.seg_model = DeepLabV3Plus(nclass=2)
         self.count_ = 0
     
@@ -149,11 +232,11 @@ class TPSNet(FCENet):
         h, w = seg_mask.shape[1:]
         seg_pred = self.seg_model(h, w, c1, c4)
         seg_loss = self.seg_criterion(seg_pred, seg_mask)
-        if self.count_ % 1000 == 0:
+        if self.count_ % 2 == 0:
             seg_pred = torch.argmax(seg_pred, dim=1)
             cv2.imshow('target', np.array(ToPILImage()(seg_mask[0].cpu().type(torch.uint8))) * 255)
             cv2.imshow('pred', np.array(ToPILImage()(seg_pred[0].cpu().type(torch.uint8))) * 255)
-            cv2.waitKey(0)
+            cv2.waitKey(1)
         self.count_ += 1
         
         losses['loss_seg'] = seg_loss
