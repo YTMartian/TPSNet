@@ -26,6 +26,7 @@ class TPSLoss(nn.Module):
         self.fiducial_type = fiducial_type
         self.steps = steps
         self.border_relax_thr = border_relax_thr
+        self.ohem_ratio = ohem_ratio
         
         self.tps_decoder_gt = TPS(num_fiducial_gt, num_points=num_sample, grid_size=(2, 2))
         self.tps_decoder = TPS(num_fiducial, num_points=num_sample, grid_size=(2, 2), fiducial_type=fiducial_type)
@@ -55,16 +56,23 @@ class TPSLoss(nn.Module):
         
         losses = multi_apply(self.forward_single, preds, gts, down_sample_rates, gt_polygons_areas)
         
+        loss_tr = torch.tensor(0., device=device, requires_grad=True).float()
+        loss_tcl = torch.tensor(0., device=device, requires_grad=True).float()
         loss_point = torch.tensor(0., device=device, requires_grad=True).float()
         
         for idx, loss in enumerate(losses):
             if idx == 0:
+                loss_tr = loss_tr + sum(loss)
+            elif idx == 1:
+                loss_tcl = loss_tcl + sum(loss)
+            elif idx == 2:
                 loss_point = loss_point + sum(loss)
         
-        results = dict()
-        
-        if self.with_point_loss:
-            results['loss_point'] = loss_point
+        results = dict(
+            # loss_text=loss_tr,
+            # loss_center=loss_tcl,
+            loss_point=loss_point #+ loss_tr + loss_tcl
+        )
         
         return results
     
@@ -92,11 +100,24 @@ class TPSLoss(nn.Module):
         
         tr_train_mask = ((train_mask * tr_mask) > 0).float()
         device = tps_pred.device
-        pos_idx = torch.where(tr_train_mask > 0)[0]
+        loss_tr = self.ohem(tr_pred, tr_mask.long(), train_mask.long())
         
+        pos_idx = torch.where(tr_train_mask > 0)[0]
+
+        loss_tcl = torch.tensor(0.).float().to(device)
+        tr_neg_mask = 1 - tr_train_mask
         if tcl_mask.max() > 1:
             print(tcl_mask)
         assert tcl_mask.min() >= 0
+        if tr_train_mask.sum().item() > 0:
+            if self.gauss_center:
+                loss_tcl_pos = self.smooth_ce_loss(tcl_pred[pos_idx], tcl_mask[pos_idx].float())
+            else:
+                loss_tcl_pos = F.cross_entropy(tcl_pred[pos_idx], tcl_mask[pos_idx].long(), reduction='none')
+    
+            loss_tcl_pos = torch.mean(loss_tcl_pos)
+            loss_tcl_neg = F.cross_entropy(tcl_pred[tr_neg_mask.bool()], tcl_mask[tr_neg_mask.bool()].long())
+            loss_tcl = loss_tcl_pos + 0.5 * loss_tcl_neg
         
         # regression loss
         loss_point = torch.tensor(0., device=device, requires_grad=True).float()
@@ -117,7 +138,7 @@ class TPSLoss(nn.Module):
                 pos_area = areas[batch_idx, tr_mask_idx] / downsample_rate ** 2
                 num_instance = torch.sum(areas > 0)
                 if num_instance == 0:
-                    return loss_point
+                    return loss_tr, loss_tcl, loss_point
                 if torch.any(pos_area <= 1):
                     pos_area[pos_area <= 1] = 100000000
                 area_weight = 1.0 / pos_area
@@ -138,4 +159,27 @@ class TPSLoss(nn.Module):
                 loss_reg_y = torch.sum(weight * F.smooth_l1_loss(ft_y_pre, ft_y, reduction='none').mean(dim=-1))
                 loss_point = loss_reg_x + loss_reg_y
         
-        return loss_point, None
+        return loss_tr, loss_tcl, loss_point
+    
+    def ohem(self, predict, target, train_mask):
+        pos = (target * train_mask).bool()
+        neg = ((1 - target) * train_mask).bool()
+        
+        n_pos = pos.float().sum()
+        
+        if n_pos.item() > 0:
+            loss_pos = F.cross_entropy(predict[pos], target[pos], reduction='sum')
+            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
+            n_neg = min(int(neg.float().sum().item()), int(self.ohem_ratio * n_pos.float()))
+        else:
+            loss_pos = torch.tensor(0.)
+            loss_neg = F.cross_entropy(predict[neg], target[neg], reduction='none')
+            n_neg = 100
+        if len(loss_neg) > n_neg:
+            loss_neg, _ = torch.topk(loss_neg, n_neg)
+        
+        return (loss_pos + loss_neg.sum()) / (n_pos + n_neg).float()
+    
+    def smooth_ce_loss(self, preds, targets):
+        log_preds = -F.log_softmax(preds, dim=-1)
+        return targets * log_preds[:, 1] + (1 - targets) * log_preds[:, 0]

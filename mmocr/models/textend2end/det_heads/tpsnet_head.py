@@ -123,7 +123,7 @@ class TPSHead(HeadMixin, BaseModule):
             g[:] = g[:] * np.tile(scale_factor[:2], (sz, 1))
         return grids
     
-    def get_boundary(self, score_maps, img_metas, rescale):
+    def get_boundary(self, score_maps, img_metas, rescale, seg_pred):
         
         assert len(score_maps) == len(self.scales)
         
@@ -131,12 +131,12 @@ class TPSHead(HeadMixin, BaseModule):
         grids = []
         for idx, score_map in enumerate(score_maps):
             scale = self.scales[idx]
-            boundary, grid = self._get_boundary_single(
-                score_map, scale, False)
+            cur_seg_pred = seg_pred[:, :, ::scale, ::scale]
+            assert score_map[0].shape[2:] == cur_seg_pred.shape[2:]
+            boundary, grid = self._get_boundary_single(score_map, scale, cur_seg_pred, False)
             boundaries = boundaries + boundary
             if len(grid) > 0:
                 grids = grids + [grid * scale]
-        
         # nms
         boundaries, keep_index = poly_nms(boundaries, self.nms_thr, with_index=True)
         if len(grids) > 0:
@@ -145,7 +145,7 @@ class TPSHead(HeadMixin, BaseModule):
         results = dict(boundary_result=[boundaries], grids_results=[grids], scales=self.scales)
         return results
     
-    def _get_boundary_single(self, score_map, scale, gt_vis=False):
+    def _get_boundary_single(self, score_map, scale, seg_pred, gt_vis=False):
         assert len(score_map) == 2
         
         return tps_decode(
@@ -160,5 +160,6 @@ class TPSHead(HeadMixin, BaseModule):
             nms_thr=self.nms_thr,
             # gt_val=gt_vis,
             # with_direction=self.with_direction,
-            test_cfg=self.test_cfg
+            test_cfg=self.test_cfg,
+            seg_pred=seg_pred
         )

@@ -82,15 +82,18 @@ def tps_decode(preds,
                score_thr=0.3,
                nms_thr=0.9,
                test_cfg=None,
+               seg_pred=None
                ):
     assert isinstance(preds, list)
     assert len(preds) == 2
     assert text_repr_type == 'poly'
     
     cls_pred = preds[0][0]
-    # if not gt_val:
+    # # if not gt_val:
     tr_pred = cls_pred[0:2].softmax(dim=0).data.cpu().numpy()
     tcl_pred = cls_pred[2:4].softmax(dim=0).data.cpu().numpy()
+    # score_pred = seg_pred[0].softmax(dim=0).data.cpu().numpy()[1]
+    # score_pred = seg_pred[0].data.cpu().numpy()[1]
     
     '''
     绘制文字区域分类和文字中心热力图
@@ -117,6 +120,7 @@ def tps_decode(preds,
     # if with_direction:
     #     direction_pred = cls_pred[4:].softmax(dim=0)
     score_pred = (tr_pred[1] ** alpha) * (tcl_pred[1] ** beta) ** (1.0 / (alpha + beta))
+    
     # else:
     #     score_pred = cls_pred[0]
     #     # direction_map =
@@ -128,9 +132,7 @@ def tps_decode(preds,
     tr_pred_mask = (score_pred) > score_thr
     tr_mask = fill_hole(tr_pred_mask)
     
-    tr_contours, _ = cv2.findContours(
-        tr_mask.astype(np.uint8), cv2.RETR_TREE,
-        cv2.CHAIN_APPROX_SIMPLE)  # opencv4
+    tr_contours, _ = cv2.findContours(tr_mask.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  # opencv4
     
     mask = np.zeros_like(tr_mask)
     boundaries = []

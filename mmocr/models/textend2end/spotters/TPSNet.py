@@ -205,8 +205,8 @@ class TPSNet(FCENet):
         self.recog_head = build_head(recog_head)
         self.from_p2 = from_p2
         
-        self.seg_criterion = nn.CrossEntropyLoss(ignore_index=255)
-        # self.seg_criterion = OhemCrossEntropy2d(ignore_index=255)
+        # self.seg_criterion = nn.CrossEntropyLoss(ignore_index=255)
+        self.seg_criterion = OhemCrossEntropy2d(ignore_index=255)
         self.seg_model = DeepLabV3Plus(nclass=2)
         self.count_ = 0
         self.show_result = True
@@ -230,7 +230,7 @@ class TPSNet(FCENet):
         
         seg_mask = kwargs['seg_mask']
         seg_mask = seg_mask.long()
-        h, w = seg_mask.shape[1:]
+        h, w = img.shape[2:]
         seg_pred = self.seg_model(h, w, c1, c4)
         seg_loss = self.seg_criterion(seg_pred, seg_mask)
         if self.show_result and self.count_ % 2 == 0:
@@ -239,7 +239,7 @@ class TPSNet(FCENet):
             cv2.imshow('pred', np.array(ToPILImage()(seg_pred[0].cpu().type(torch.uint8))) * 255)
             # shrink_2 = seg_pred[0][::2, ::2]
             # cv2.imshow('shrink_2', np.array(ToPILImage()(shrink_2.cpu().type(torch.uint8))) * 255)
-            cv2.waitKey(0)
+            cv2.waitKey(1)
         self.count_ += 1
         
         losses['loss_seg'] = seg_loss
@@ -248,29 +248,23 @@ class TPSNet(FCENet):
     
     def simple_test(self, img, img_metas, rescale=False):
         # cv2.imshow('in', np.array(ToPILImage()(img[0].cpu())))
-        x = self.extract_feat(img)
+        x, c1, c4 = self.extract_feat(img, is_get_c1_c4=True)
         outs = self.bbox_head(x[1:])
-        
-        # class_img = outs[0][0][0][2:, :, :].cpu()
-        # class_img = torch.argmax(class_img, 0, keepdim=True).type(torch.uint8)
-        # print(class_img.shape)
-        # cv2.imshow('out', np.array(ToPILImage()(class_img * 255)))
-        # cv2.waitKey(0)
+        h, w = img.shape[2:]  # (1024,1024)
+        seg_pred = self.seg_model(h, w, c1, c4)
         
         # early return to avoid post processing
         if torch.onnx.is_in_onnx_export():
             return outs
-        
         if len(img_metas) > 1:
             boundaries = [
-                self.bbox_head.get_boundary(*(outs[i].unsqueeze(0)), [img_metas[i]], rescale) for i in
-                range(len(img_metas))
+                self.bbox_head.get_boundary(*(outs[i].unsqueeze(0)), [img_metas[i]], rescale, seg_pred[i]) for i in range(len(img_metas))
             ]
             print('len(img_metas) > 1')
             exit()
         else:
             boundaries = [
-                self.bbox_head.get_boundary(outs, img_metas, rescale)
+                self.bbox_head.get_boundary(outs, img_metas, rescale, seg_pred)
             ]
         
         boundaries = [self.recog_head.my_simple_test(x[:-1], boundaries[0], img_metas=img_metas, rescale=rescale)]
