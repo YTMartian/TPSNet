@@ -64,6 +64,12 @@ class TPSTargets(TextSnakeTargets):
             Z = clf.pdf(np.dstack([XX, YY])).reshape(div, div)
             mask = Z / Z.max()
             self.gauss_mask = mask
+        
+        # 经过半监督训练的语义分割模型
+        self.seg_model = None
+    
+    def get_seg_mask(self):
+        pass
     
     def generate_center_region_mask(self, img_size, text_polys):
         """Generate text center region mask.

@@ -71,7 +71,7 @@ class TPSLoss(nn.Module):
         results = dict(
             # loss_text=loss_tr,
             # loss_center=loss_tcl,
-            loss_point=loss_point #+ loss_tr + loss_tcl
+            loss_point=loss_point  # + loss_tr + loss_tcl
         )
         
         return results
@@ -103,7 +103,7 @@ class TPSLoss(nn.Module):
         loss_tr = self.ohem(tr_pred, tr_mask.long(), train_mask.long())
         
         pos_idx = torch.where(tr_train_mask > 0)[0]
-
+        
         loss_tcl = torch.tensor(0.).float().to(device)
         tr_neg_mask = 1 - tr_train_mask
         if tcl_mask.max() > 1:
@@ -114,7 +114,7 @@ class TPSLoss(nn.Module):
                 loss_tcl_pos = self.smooth_ce_loss(tcl_pred[pos_idx], tcl_mask[pos_idx].float())
             else:
                 loss_tcl_pos = F.cross_entropy(tcl_pred[pos_idx], tcl_mask[pos_idx].long(), reduction='none')
-    
+            
             loss_tcl_pos = torch.mean(loss_tcl_pos)
             loss_tcl_neg = F.cross_entropy(tcl_pred[tr_neg_mask.bool()], tcl_mask[tr_neg_mask.bool()].long())
             loss_tcl = loss_tcl_pos + 0.5 * loss_tcl_neg
